@@ -1,0 +1,224 @@
+/*
+ * Copyright (c) 2011-2016 Pivotal Software Inc, All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *       http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+buildscript {
+  repositories {
+    maven { url "http://repo.spring.io/plugins-release" }
+  }
+  dependencies {
+    classpath 'org.springframework.build.gradle:propdeps-plugin:0.0.7',
+            'io.spring.gradle:spring-io-plugin:0.0.4.RELEASE',
+            'com.github.jengelman.gradle.plugins:shadow:1.2.0',
+            'org.asciidoctor:asciidoctorj-pdf:1.5.0-alpha.8'
+  }
+}
+
+plugins {
+  id 'org.asciidoctor.convert' version '1.5.2'
+}
+
+description = 'Non-Blocking Reactive Foundation for the JVM'
+group = 'io.projectreactor.bus'
+
+ext {
+  gradleVersion = '2.12'
+  gradleScriptDir = "${rootProject.projectDir}/gradle"
+
+  // Languages
+  groovyVersion = '2.4.1'
+
+  // Logging
+  slf4jVersion = '1.7.12'
+  logbackVersion = '1.1.2'
+
+  // Libraries
+  jacksonDatabindVersion = '2.5.1'
+  jsonPathVersion = '2.0.0'
+  reactorCoreVersion = '3.0.2.RELEASE'
+  gsCollectionsVersion = '5.1.0'
+  pcollectionsVersion = "2.1.2"
+  jsonPathVersion = '2.0.0'
+
+  // Testing
+  spockVersion = '1.0-groovy-2.4'
+
+  javadocLinks = ["http://docs.oracle.com/javase/8/docs/api/",
+				  "http://docs.oracle.com/javaee/6/api/",
+				  "http://www.reactive-streams.org/reactive-streams-1.0.0-javadoc/"] as String[]
+
+
+  bundleImportPackages = ['org.slf4j;resolution:=optional;version="[1.5.4,2)"',
+						  'rx;resolution:=optional',
+						  'com.google;resolution:=optional',
+						  'com.google;resolution:=optional',
+						  '*']
+
+}
+
+apply plugin: 'java'
+apply plugin: 'jacoco'
+apply from: "$gradleScriptDir/setup.gradle"
+apply from: "$gradleScriptDir/doc.gradle"
+apply plugin: 'propdeps'
+apply plugin: 'groovy'
+apply plugin: 'osgi'
+apply from: "${gradleScriptDir}/ide.gradle"
+
+jacoco {
+  toolVersion = '0.7.7.201606060606'
+}
+
+jacocoTestReport {
+  reports {
+	xml.enabled = true
+	html.enabled = true
+  }
+}
+
+if (project.hasProperty('platformVersion')) {
+  apply plugin: 'spring-io'
+
+  dependencyManagement {
+    springIoTestRuntime {
+      imports {
+        mavenBom "io.spring.platform:platform-bom:$platformVersion"
+      }
+    }
+  }
+}
+
+[compileJava, compileTestJava]*.options*.compilerArgs = ["-Xlint:-varargs", // intentionally disabled
+														 "-Xlint:cast",
+														 "-Xlint:classfile",
+														 "-Xlint:dep-ann",
+														 "-Xlint:divzero",
+														 "-Xlint:empty",
+														 "-Xlint:finally",
+														 "-Xlint:overrides",
+														 "-Xlint:path",
+														 "-Xlint:processing",
+														 "-Xlint:static",
+														 "-Xlint:try",
+														 "-Xlint:deprecation",
+														 "-Xlint:unchecked",
+														 "-Xlint:-serial",      // intentionally disabled
+														 "-Xlint:-options",     // intentionally disabled
+														 "-Xlint:-fallthrough", // intentionally disabled
+														 "-Xlint:-rawtypes"     // TODO enable and fix warnings
+]
+
+compileJava {
+  sourceCompatibility = 1.8
+  targetCompatibility = 1.8
+}
+
+compileTestJava {
+  sourceCompatibility = 1.8
+  targetCompatibility = 1.8
+}
+
+if (JavaVersion.current().isJava8Compatible()) {
+  compileTestJava.options.compilerArgs += "-parameters"
+  tasks.withType(Javadoc) {
+	options.addStringOption('Xdoclint:none', '-quiet')
+  }
+}
+
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+
+
+project.tasks.withType(Test).all {
+  systemProperty("java.awt.headless", "true")
+  systemProperty("reactor.trace.cancel", "true")
+  systemProperty("reactor.trace.nocapacity", "true")
+  systemProperty("testGroups", project.properties.get("testGroups"))
+  scanForTestClasses = false
+  include '**/*Tests.*'
+  include '**/*Test.*'
+  include '**/*Spec.*'
+  exclude '**/*Abstract*.*'
+}
+
+configure(rootProject) {
+  repositories {
+	mavenCentral()
+	jcenter()
+	maven { url 'http://repo.spring.io/libs-milestone' }
+	maven { url "https://oss.sonatype.org/content/repositories/releases/" }
+
+	mavenLocal()
+	maven { url 'http://repo.spring.io/libs-snapshot' }
+
+  }
+
+  configurations {
+    jsr166backport
+    testCompile.extendsFrom jsr166backport
+    compile.extendsFrom jsr166backport
+  }
+
+// dependencies that are common across all java projects
+  ext.bundleImportPackages = ['com.jayway.jsonpath;resolution:=optional',
+							  'com.jayway.jsonpath.internal;resolution:=optional',
+							  'com.jayway.jsonpath.spi;resolution:=optional',
+							  'com.fasterxml.jackson.core;resolution:=optional',
+							  'com.fasterxml.jackson.databind;resolution:=optional',
+							  'com.fasterxml.jackson.databind.node;resolution:=optional',
+							  'com.fasterxml.jackson.databind.type;resolution:=optional',
+							  '*']
+
+  dependencies {
+	compile "io.projectreactor:reactor-core:$reactorCoreVersion"
+
+	// Rich Collections
+	optional "com.goldmansachs:gs-collections:$gsCollectionsVersion"
+
+	optional "com.fasterxml.jackson.core:jackson-databind:$jacksonDatabindVersion"
+	optional "com.jayway.jsonpath:json-path:$jsonPathVersion"
+	testCompile "io.projectreactor:reactor-test:1.0.0.BUILD-SNAPSHOT"
+
+    // JSR-305 annotations
+    optional "com.google.code.findbugs:jsr305:3.0.0"
+
+    //Optional Logging Operator
+    optional "org.slf4j:slf4j-api:$slf4jVersion"
+
+    //Optional JDK 9 Converter
+    jsr166backport "io.projectreactor:jsr166:1.0.0.BUILD-SNAPSHOT"
+
+    testRuntime "ch.qos.logback:logback-classic:$logbackVersion"
+    // Testing
+    testCompile "org.codehaus.groovy:groovy:$groovyVersion",
+            "org.spockframework:spock-core:$spockVersion",
+            "org.hamcrest:hamcrest-library:1.3",
+            "org.testng:testng:6.8.5"
+  }
+
+  sourceSets.test.resources.srcDirs = ["src/test/resources", "src/test/java"]
+
+  if (!JavaVersion.current().isJava9Compatible()) {
+	test {
+	  jvmArgs = ["-Xbootclasspath/p:" + configurations.jsr166backport.asPath]
+	}
+  }
+
+
+  jar {
+    manifest {
+      instruction 'Import-Package', bundleImportPackages.join(',')
+    }
+  }
+}
