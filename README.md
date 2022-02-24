@@ -1,3 +1,5 @@
+# reactor-bus is no longer actively maintained by VMware, Inc.
+
 # reactor-bus
 Legacy Reactor Bus
 
